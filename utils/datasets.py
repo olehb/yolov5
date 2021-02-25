@@ -18,7 +18,6 @@ import torch
 import torch.nn.functional as F
 from PIL import Image, ExifTags
 from torch.utils.data import Dataset
-from tqdm import tqdm
 
 from utils.general import xyxy2xywh, xywh2xyxy, xywhn2xyxy, xyn2xy, segment2box, segments2boxes, resample_segments, \
     clean_str
@@ -386,7 +385,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         nf, nm, ne, nc, n = cache.pop('results')  # found, missing, empty, corrupted, total
         if exists:
             d = f"Scanning '{cache_path}' for images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
-            tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results
+            print(d)
         assert nf > 0 or not augment, f'{prefix}No labels in {cache_path}. Can not train without labels. See {help_url}'
 
         # Read cache
@@ -438,18 +437,15 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             gb = 0  # Gigabytes of cached images
             self.img_hw0, self.img_hw = [None] * n, [None] * n
             results = ThreadPool(8).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))  # 8 threads
-            pbar = tqdm(enumerate(results), total=n)
-            for i, x in pbar:
+            for i, x in enumerate(results):
                 self.imgs[i], self.img_hw0[i], self.img_hw[i] = x  # img, hw_original, hw_resized = load_image(self, i)
                 gb += self.imgs[i].nbytes
-                pbar.desc = f'{prefix}Caching images ({gb / 1E9:.1f}GB)'
 
     def cache_labels(self, path=Path('./labels.cache'), prefix=''):
         # Cache dataset labels, check images and read shapes
         x = {}  # dict
         nm, nf, ne, nc = 0, 0, 0, 0  # number missing, found, empty, duplicate
-        pbar = tqdm(zip(self.img_files, self.label_files), desc='Scanning images', total=len(self.img_files))
-        for i, (im_file, lb_file) in enumerate(pbar):
+        for i, (im_file, lb_file) in enumerate(zip(self.img_files, self.label_files)):
             try:
                 # verify images
                 im = Image.open(im_file)
@@ -994,7 +990,7 @@ def flatten_recursive(path='../coco128'):
     # Flatten a recursive directory by bringing all files to top level
     new_path = Path(path + '_flat')
     create_folder(new_path)
-    for file in tqdm(glob.glob(str(Path(path)) + '/**/*.*', recursive=True)):
+    for file in glob.glob(str(Path(path)) + '/**/*.*', recursive=True):
         shutil.copyfile(file, new_path / Path(file).name)
 
 
@@ -1005,7 +1001,7 @@ def extract_boxes(path='../coco128/'):  # from utils.datasets import *; extract_
     shutil.rmtree(path / 'classifier') if (path / 'classifier').is_dir() else None  # remove existing
     files = list(path.rglob('*.*'))
     n = len(files)  # number of files
-    for im_file in tqdm(files, total=n):
+    for im_file in files:
         if im_file.suffix[1:] in img_formats:
             # image
             im = cv2.imread(str(im_file))[..., ::-1]  # BGR to RGB
@@ -1045,7 +1041,7 @@ def autosplit(path='../coco128', weights=(0.9, 0.1, 0.0)):  # from utils.dataset
     indices = random.choices([0, 1, 2], weights=weights, k=n)  # assign each image to a split
     txt = ['autosplit_train.txt', 'autosplit_val.txt', 'autosplit_test.txt']  # 3 txt files
     [(path / x).unlink() for x in txt if (path / x).exists()]  # remove existing
-    for i, img in tqdm(zip(indices, files), total=n):
+    for i, img in zip(indices, files):
         if img.suffix[1:] in img_formats:
             with open(path / txt[i], 'a') as f:
                 f.write(str(img) + '\n')  # add image to txt file
