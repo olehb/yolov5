@@ -7,7 +7,7 @@ import numpy as np
 import requests
 import torch
 import torch.nn as nn
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from utils.datasets import letterbox
 from utils.general import non_max_suppression, make_divisible, scale_coords, xyxy2xywh
@@ -198,7 +198,8 @@ class autoShape(nn.Module):
         shape0, shape1, files = [], [], []  # image and inference shapes, filenames
         for i, im in enumerate(imgs):
             if isinstance(im, str):  # filename or uri
-                im = Image.open(requests.get(im, stream=True).raw if im.startswith('http') else im)  # open
+                im, f = Image.open(requests.get(im, stream=True).raw if im.startswith('http') else im), im  # open
+                im.filename = f  # for uri
             files.append(Path(im.filename).with_suffix('.jpg').name if isinstance(im, Image.Image) else f'image{i}.jpg')
             im = np.array(im)  # to numpy
             if im.shape[0] < 5:  # image in CHW
@@ -244,7 +245,7 @@ class Detections:
         self.n = len(self.pred)
 
     def display(self, pprint=False, show=False, save=False, render=False, save_dir=''):
-        from utils.plots import color_list
+        from utils.plots import color_list, plot_one_box
         colors = color_list()
         for i, (img, pred) in enumerate(zip(self.imgs, self.pred)):
             str = f'image {i + 1}/{len(self.pred)}: {img.shape[0]}x{img.shape[1]} '
@@ -253,10 +254,10 @@ class Detections:
                     n = (pred[:, -1] == c).sum()  # detections per class
                     str += f"{n} {self.names[int(c)]}{'s' * (n > 1)}, "  # add to string
                 if show or save or render:
-                    img = Image.fromarray(img.astype(np.uint8)) if isinstance(img, np.ndarray) else img  # from np
                     for *box, conf, cls in pred:  # xyxy, confidence, class
-                        # str += '%s %.2f, ' % (names[int(cls)], conf)  # label
-                        ImageDraw.Draw(img).rectangle(box, width=4, outline=colors[int(cls) % 10])  # plot
+                        label = f'{self.names[int(cls)]} {conf:.2f}'
+                        plot_one_box(box, img, label=label, color=colors[int(cls) % 10])
+            img = Image.fromarray(img.astype(np.uint8)) if isinstance(img, np.ndarray) else img  # from np
             if pprint:
                 print(str.rstrip(', '))
             if show:
